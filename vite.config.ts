@@ -11,4 +11,11 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  // CRITICAL FOR WEB WORKERS & LOCAL LLMS
+  worker: {
+    format: 'es', // Bundles the worker file as an ES Module
+  },
+  optimizeDeps: {
+    exclude: ['@huggingface/transformers'],
+  },
 })
