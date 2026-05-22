@@ -20,19 +20,35 @@ self.addEventListener('message', async (event: MessageEvent) => {
     try {
       self.postMessage({ status: 'loading', message: 'Initializing model...' });
       
+      const progress_callback = (data: any) => {
+        let msg = data.status === 'progress' ? 'Downloading' : data.status;
+        if (data.file) msg += ` ${data.file}`;
+        if (data.progress) msg += ` (${Math.round(data.progress)}%)`;
+        self.postMessage({ status: 'progress', message: msg });
+      };
+
       // Auto-detects WebGPU, falls back to WASM if unavailable
       generator = await pipeline('text-generation', data.modelId, {
         device: 'webgpu', 
         dtype: 'q4', // 4-bit quantization for mobile/laptop safety
+        progress_callback,
       });
 
       self.postMessage({ status: 'ready' });
     } catch (error: any) {
       // If WebGPU failed during initialization, force WASM fallback
       try {
+        const progress_callback = (data: any) => {
+          let msg = data.status === 'progress' ? 'Downloading' : data.status;
+          if (data.file) msg += ` ${data.file}`;
+          if (data.progress) msg += ` (${Math.round(data.progress)}%)`;
+          self.postMessage({ status: 'progress', message: msg });
+        };
+        
         generator = await pipeline('text-generation', data.modelId, {
           device: 'wasm',
           dtype: 'q8',
+          progress_callback,
         });
         self.postMessage({ status: 'ready', message: 'Running on CPU fallback' });
       } catch (wasmError: any) {
@@ -56,7 +72,7 @@ self.addEventListener('message', async (event: MessageEvent) => {
     try {
       // Wait for the full generation to complete
       const result = await generator(messages, {
-        max_new_tokens: 256,
+        max_new_tokens: 8192, 
         temperature: 0.7,
       });
 

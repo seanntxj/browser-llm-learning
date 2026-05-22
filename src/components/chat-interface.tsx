@@ -5,12 +5,43 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Loader2 } from 'lucide-react';
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+
+const MODELS = [
+  { 
+    name: 'Qwen 3.5 (0.8B)', 
+    transformersId: 'onnx-community/Qwen3.5-0.8B-ONNX', 
+    webllmId: 'Qwen3.5-0.8B-q4f16_1-MLC' 
+  },
+  { 
+    name: 'Qwen 3.5 (1.7B)', 
+    transformersId: 'onnx-community/Qwen3-1.7B-ONNX', 
+    webllmId: 'Qwen3-1.7B-q4f16_1-MLC' 
+  },
+  { 
+    name: 'SmolLM2 (1.7B)', 
+    transformersId: 'onnx-community/SmolLM2-360M-Instruct-ONNX', // Fallback to 360M for ONNX as 1.7B isn't compiled
+    webllmId: 'SmolLM2-1.7B-Instruct-q4f16_1-MLC'
+  },
+];
 
 export function ChatInterface() {
-  // We use Qwen-2-0.5B because it's tiny (~350MB) and highly capable for its size.
-  // Perfect for mobile phones and standard business laptops.
-  const { status, output, loadModel, generate } = useLocalAI('onnx-community/Qwen2.5-0.5B-Instruct');
+  const hasWebGPU = 'gpu' in navigator;
+  const [engine, setEngine] = useState<'transformers' | 'webllm'>(hasWebGPU ? 'webllm' : 'transformers');
+  const { status, output, loadModel, generate, progressMessage } = useLocalAI(engine);
   const [input, setInput] = useState('');
+  
+  const [selectedModelIndex, setSelectedModelIndex] = useState("0");
+  
+  const selectedModelInfo = MODELS[parseInt(selectedModelIndex)];
+  const currentEngineModelId = engine === 'webllm' ? selectedModelInfo.webllmId : selectedModelInfo.transformersId;
 
   return (
     <Card className="w-full max-w-2xl mx-auto mt-10">
@@ -22,15 +53,43 @@ export function ChatInterface() {
       </CardHeader>
       <CardContent className="space-y-4">
         {status === 'idle' && (
-          <Button onClick={loadModel} className="w-full">
-            Download & Load Model (~350MB)
-          </Button>
+          <div className="space-y-4">
+            <Tabs value={engine} onValueChange={(v) => setEngine(v as any)} className="w-full">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="webllm" disabled={!hasWebGPU}>WebLLM {hasWebGPU ? '(Fast)' : '(No WebGPU)'}</TabsTrigger>
+                <TabsTrigger value="transformers">Transformers.js</TabsTrigger>
+              </TabsList>
+            </Tabs>
+
+            <Select value={selectedModelIndex} onValueChange={setSelectedModelIndex}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select a model" />
+              </SelectTrigger>
+              <SelectContent>
+                {MODELS.map((model, idx) => (
+                  <SelectItem key={idx} value={idx.toString()}>
+                    {model.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button onClick={() => loadModel(currentEngineModelId)} className="w-full">
+              Download & Load Model
+            </Button>
+          </div>
         )}
         
         {status === 'loading' && (
-          <div className="flex items-center justify-center p-8 space-x-2">
-            <Loader2 className="h-6 w-6 animate-spin text-primary" />
-            <span className="text-sm text-muted-foreground">Downloading weights to browser cache...</span>
+          <div className="flex flex-col items-center justify-center p-8 space-y-4">
+            <div className="flex items-center space-x-2">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+              <span className="text-sm text-muted-foreground">Loading Engine...</span>
+            </div>
+            {progressMessage && (
+               <span className="text-xs text-muted-foreground text-center max-w-md break-words">
+                 {progressMessage}
+               </span>
+            )}
           </div>
         )}
 
