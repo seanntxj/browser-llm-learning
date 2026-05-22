@@ -1,9 +1,21 @@
-import { CreateMLCEngine } from '@mlc-ai/web-llm';
+import { CreateMLCEngine, hasModelInCache } from '@mlc-ai/web-llm';
 
 let engine: any = null;
 
 self.addEventListener('message', async (event: MessageEvent) => {
   const { type, data } = event.data;
+
+  if (type === 'check_cache') {
+    try {
+      const statuses: Record<string, boolean> = {};
+      for (const modelId of data.models) {
+        statuses[modelId] = await hasModelInCache(modelId);
+      }
+      self.postMessage({ status: 'cache_status', data: statuses });
+    } catch (e) {
+      console.error('Cache check failed:', e);
+    }
+  }
 
   if (type === 'load') {
     try {

@@ -16,6 +16,24 @@ let generator: any = null;
 self.addEventListener('message', async (event: MessageEvent) => {
   const { type, data } = event.data;
 
+  if (type === 'check_cache') {
+    try {
+      const statuses: Record<string, boolean> = {};
+      const cache = await caches.open('transformers-cache');
+      const keys = await cache.keys();
+      const cachedUrls = keys.map((req: any) => req.url);
+
+      for (const modelId of data.models) {
+        // Just checking if any file for this model exists in cache
+        // Note: Transformers.js URI encodes the model id / revision so we check simply
+        statuses[modelId] = cachedUrls.some((url: string) => url.includes(modelId));
+      }
+      self.postMessage({ status: 'cache_status', data: statuses });
+    } catch (e) {
+      console.error('Cache check failed:', e);
+    }
+  }
+
   if (type === 'load') {
     try {
       self.postMessage({ status: 'loading', message: 'Initializing model...' });

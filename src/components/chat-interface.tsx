@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocalAI } from '@/hooks/use-local-ai';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -35,7 +35,7 @@ const MODELS = [
 export function ChatInterface() {
   const hasWebGPU = 'gpu' in navigator;
   const [engine, setEngine] = useState<'transformers' | 'webllm'>(hasWebGPU ? 'webllm' : 'transformers');
-  const { status, output, loadModel, generate, progressMessage } = useLocalAI(engine);
+  const { status, output, loadModel, generate, progressMessage, cachedModels, checkCache, reset } = useLocalAI(engine);
   const [input, setInput] = useState('');
   
   const [selectedModelIndex, setSelectedModelIndex] = useState("0");
@@ -43,13 +43,29 @@ export function ChatInterface() {
   const selectedModelInfo = MODELS[parseInt(selectedModelIndex)];
   const currentEngineModelId = engine === 'webllm' ? selectedModelInfo.webllmId : selectedModelInfo.transformersId;
 
+  useEffect(() => {
+    // Slight delay to ensure worker is ready to receive messages
+    const timer = setTimeout(() => {
+      const modelsToCheck = MODELS.map(m => engine === 'webllm' ? m.webllmId : m.transformersId);
+      checkCache(modelsToCheck);
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [engine, status]); // Check when engine changes or when going back to idle status
+
   return (
     <Card className="w-full max-w-2xl mx-auto mt-10">
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>Local Browser LLM</CardTitle>
-        <Badge variant={status === 'ready' ? 'default' : 'secondary'}>
-          {status.toUpperCase()}
-        </Badge>
+        <div className="flex items-center space-x-2">
+          {(status === 'ready' || status === 'generating' || status === 'error') && (
+            <Button variant="outline" size="sm" onClick={reset} disabled={status === 'generating'}>
+              Change Model
+            </Button>
+          )}
+          <Badge variant={status === 'ready' ? 'default' : 'secondary'}>
+            {status.toUpperCase()}
+          </Badge>
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
         {status === 'idle' && (
@@ -66,11 +82,15 @@ export function ChatInterface() {
                 <SelectValue placeholder="Select a model" />
               </SelectTrigger>
               <SelectContent>
-                {MODELS.map((model, idx) => (
-                  <SelectItem key={idx} value={idx.toString()}>
-                    {model.name}
-                  </SelectItem>
-                ))}
+                {MODELS.map((model, idx) => {
+                  const mId = engine === 'webllm' ? model.webllmId : model.transformersId;
+                  const isCached = cachedModels[mId];
+                  return (
+                    <SelectItem key={idx} value={idx.toString()}>
+                      {model.name} {isCached ? '💾' : ''}
+                    </SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
             <Button onClick={() => loadModel(currentEngineModelId)} className="w-full">

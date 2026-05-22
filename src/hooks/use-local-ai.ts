@@ -5,10 +5,11 @@ export function useLocalAI(engineType: 'transformers' | 'webllm') {
   const [output, setOutput] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [progressMessage, setProgressMessage] = useState<string>('');
+  const [cachedModels, setCachedModels] = useState<Record<string, boolean>>({});
   const workerRef = useRef<Worker | null>(null);
 
-  useEffect(() => {
-    // Terminate existing worker if switching engines
+  const initWorker = () => {
+    // Terminate existing worker if switching engines or resetting
     if (workerRef.current) {
       workerRef.current.terminate();
     }
@@ -42,10 +43,17 @@ export function useLocalAI(engineType: 'transformers' | 'webllm') {
       if (workerStatus === 'update') {
         setOutput(workerOutput);
       }
+      if (workerStatus === 'cache_status') {
+        setCachedModels(event.data.data);
+      }
       if (workerStatus === 'complete') {
         setStatus('ready');
       }
     };
+  };
+
+  useEffect(() => {
+    initWorker();
 
     return () => {
       workerRef.current?.terminate();
@@ -64,5 +72,13 @@ export function useLocalAI(engineType: 'transformers' | 'webllm') {
     workerRef.current?.postMessage({ type: 'generate', data: { prompt } });
   };
 
-  return { status, output, error, progressMessage, loadModel, generate };
+  const checkCache = (models: string[]) => {
+    workerRef.current?.postMessage({ type: 'check_cache', data: { models } });
+  };
+
+  const reset = () => {
+    initWorker();
+  };
+
+  return { status, output, error, progressMessage, cachedModels, loadModel, generate, checkCache, reset };
 }
